@@ -503,6 +503,35 @@ inline void deep_copy(const View<T, DP...>& dst,
   }
 }
 
+template <class ExecSpace, class T, class... DP, class... SP>
+inline void deep_copy(ExecSpace const& exec_space,
+                      const View<T, DP...>& dst,
+                      const Kokkos::Experimental::DynamicView<T, SP...>& src) {
+  using dst_type = View<T, DP...>;
+  using src_type = Kokkos::Experimental::DynamicView<T, SP...>;
+
+  using src_memory_space    = typename ViewTraits<T, SP...>::memory_space;
+  using dst_memory_space    = typename ViewTraits<T, SP...>::memory_space;
+
+  enum {
+    ExecCanAccessSrc =
+        Kokkos::SpaceAccessibility<ExecSpace,
+                                   src_memory_space>::accessible,
+    ExecCanAccessDst =
+        Kokkos::SpaceAccessibility<ExecSpace,
+                                   dst_memory_space>::accessible
+  };
+
+  if (ExecCanAccessSrc && ExecCanAccessDst) {
+    // Copying data between views in accessible memory spaces and either
+    // non-contiguous or incompatible shape.
+    Kokkos::Impl::ViewRemap<dst_type, src_type, ExecSpace>(exec_space, dst, src);
+  } else {
+    Kokkos::Impl::throw_runtime_exception(
+        "deep_copy given views that would require a temporary allocation");
+  }
+}
+
 template <class T, class... DP, class... SP>
 inline void deep_copy(const Kokkos::Experimental::DynamicView<T, DP...>& dst,
                       const View<T, SP...>& src) {
@@ -524,6 +553,35 @@ inline void deep_copy(const Kokkos::Experimental::DynamicView<T, DP...>& dst,
     // non-contiguous or incompatible shape.
     Kokkos::Impl::ViewRemap<dst_type, src_type>(dst, src);
     Kokkos::fence();
+  } else {
+    Kokkos::Impl::throw_runtime_exception(
+        "deep_copy given views that would require a temporary allocation");
+  }
+}
+
+template <class ExecSpace, class T, class... DP, class... SP>
+inline void deep_copy(ExecSpace const& exec_space,
+                      const Kokkos::Experimental::DynamicView<T, DP...>& dst,
+                      const View<T, SP...>& src) {
+  using dst_type = Kokkos::Experimental::DynamicView<T, SP...>;
+  using src_type = View<T, DP...>;
+
+  using dst_memory_space = typename ViewTraits<T, DP...>::memory_space;
+  using src_memory_space = typename ViewTraits<T, SP...>::memory_space;
+
+  enum {
+    ExecCanAccessSrc =
+        Kokkos::SpaceAccessibility<ExecSpace,
+                                   src_memory_space>::accessible,
+    ExecCanAccessDst =
+        Kokkos::SpaceAccessibility<ExecSpace,
+                                   dst_memory_space>::accessible
+  };
+
+  if (ExecCanAccessSrc && ExecCanAccessDst) {
+    // Copying data between views in accessible memory spaces and either
+    // non-contiguous or incompatible shape.
+    Kokkos::Impl::ViewRemap<dst_type, src_type, ExecSpace>(exec_space, dst, src);
   } else {
     Kokkos::Impl::throw_runtime_exception(
         "deep_copy given views that would require a temporary allocation");
